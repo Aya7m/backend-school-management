@@ -174,67 +174,114 @@ export const getStudentReport = async (req, res) => {
 //   }
 // };
 
+// export const saveWeeklyGrades = async (req, res) => {
+//   const { classId, subjectId, weekNumber, grades } = req.body;
+
+//   for (const g of grades) {
+//     let record = await Grade.findOne({
+//       student: g.studentId,
+//       class: classId,
+//       subject: subjectId,
+//     });
+
+//     if (!record) {
+//       record = await Grade.create({
+//         student: g.studentId,
+//         class: classId,
+//         subject: subjectId,
+//         weeks: [],
+//       });
+//     }
+
+//     const exists = record.weeks.find((w) => w.weekNumber === weekNumber);
+
+//     if (!exists) {
+//       record.weeks.push({
+//         weekNumber,
+//         weekly: g.weekly,
+//         behavior: g.behavior,
+//         homework: g.homework,
+//       });
+
+//       await record.save();
+//     }
+//   }
+
+//   res.json({ message: "Weekly saved" });
+// };
+
 export const saveWeeklyGrades = async (req, res) => {
   const { classId, subjectId, weekNumber, grades } = req.body;
 
   for (const g of grades) {
-    let record = await Grade.findOne({
-      student: g.studentId,
-      class: classId,
-      subject: subjectId,
-    });
-
-    if (!record) {
-      record = await Grade.create({
+    await Grade.findOneAndUpdate(
+      {
         student: g.studentId,
         class: classId,
         subject: subjectId,
-        weeks: [],
-      });
-    }
-
-    const exists = record.weeks.find((w) => w.weekNumber === weekNumber);
-
-    if (!exists) {
-      record.weeks.push({
-        weekNumber,
-        weekly: g.weekly,
-        behavior: g.behavior,
-        homework: g.homework,
-      });
-
-      await record.save();
-    }
+      },
+      {
+        $setOnInsert: {
+          student: g.studentId,
+          class: classId,
+          subject: subjectId,
+          weeks: [],
+        },
+        $pull: {
+          weeks: { weekNumber }, // 🔥 يمنع التكرار
+        },
+        $set: {
+          student: g.studentId,
+          class: classId,
+          subject: subjectId,
+          weeks: {
+            weekNumber,
+            weekly: g.weekly,
+            behavior: g.behavior,
+            homework: g.homework,
+          },
+        },
+      },
+      { upsert: true, new: true },
+    );
   }
 
   res.json({ message: "Weekly saved" });
 };
-
 export const saveExams = async (req, res) => {
-  const { studentId, classId, subjectId, monthExam1, monthExam2, finalExam } =
-    req.body;
+  try {
+    const { studentId, classId, subjectId, monthExam1, monthExam2, finalExam } =
+      req.body;
 
-  let grade = await Grade.findOne({
-    student: studentId,
-    class: classId,
-    subject: subjectId,
-  });
+    const grade = await Grade.findOneAndUpdate(
+      {
+        student: studentId,
+        class: classId,
+        subject: subjectId,
+      },
+      {
+        $set: {
+          monthExam1: monthExam1 || 0,
+          monthExam2: monthExam2 || 0,
+          finalExam: finalExam || 0,
+        },
+      },
+      { new: true, upsert: true },
+    );
 
-  if (!grade) {
-    grade = await Grade.create({
-      student: studentId,
-      class: classId,
-      subject: subjectId,
-    });
+    // 🔥 لازم تحسبي total هنا
+    grade.total =
+      (grade.weeks?.reduce((a, w) => a + (w.weekly || 0), 0) || 0) +
+      (grade.monthExam1 || 0) +
+      (grade.monthExam2 || 0) +
+      (grade.finalExam || 0);
+
+    await grade.save();
+
+    res.json(grade);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
-
-  grade.monthExam1 = monthExam1;
-  grade.monthExam2 = monthExam2;
-  grade.finalExam = finalExam;
-
-  await grade.save();
-
-  res.json({ message: "Exams saved" });
 };
 export const getTeacherDashboard = async (req, res) => {
   try {

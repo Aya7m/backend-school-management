@@ -24,19 +24,27 @@ const gradeSchema = new mongoose.Schema({
 gradeSchema.methods.calculateTotal = function () {
   const weeks = this.weeks || [];
 
-  const weeklyAvg = weeks.reduce((s, w) => s + (w.weekly || 0), 0) / 13;
+  const weeklyAvg =
+    weeks.reduce((s, w) => s + (w.weekly || 0), 0) / 13;
 
-  const behaviorAvg = weeks.reduce((s, w) => s + (w.behavior || 0), 0) / 13;
+  const behaviorAvg =
+    weeks.reduce((s, w) => s + (w.behavior || 0), 0) / 13;
 
-  const homeworkAvg = weeks.reduce((s, w) => s + (w.homework || 0), 0) / 13;
+  const homeworkAvg =
+    weeks.reduce((s, w) => s + (w.homework || 0), 0) / 13;
 
-  const weeklyScore = weeklyAvg + behaviorAvg + homeworkAvg; // /40
+  const weeklyScore =
+    (weeklyAvg + behaviorAvg + homeworkAvg); // 60%
 
-  const exams =
-    (this.monthExam1 || 0) + (this.monthExam2 || 0) + (this.finalExam || 0); // /60
+  const examsScore =
+    (this.monthExam1 || 0) +
+    (this.monthExam2 || 0) +
+    (this.finalExam || 0); // 40%
 
-  this.total = weeklyScore + exams;
+  this.total = weeklyScore + examsScore;
 };
+
+gradeSchema.index({ student: 1, class: 1, subject: 1 }, { unique: true });
 gradeSchema.pre("save", async function () {
   this.calculateTotal();
 });

@@ -1,8 +1,6 @@
 import { Attendance } from "../models/attendance.model.js";
 import { Grade } from "../models/grids.js";
 
-
-
 export const getStudentDashboard = async (req, res) => {
   try {
     const studentId = req.user._id;
@@ -11,9 +9,7 @@ export const getStudentDashboard = async (req, res) => {
     const attendance = await Attendance.find({ student: studentId });
 
     const total = attendance.length;
-    const present = attendance.filter(
-      (a) => a.status === "present"
-    ).length;
+    const present = attendance.filter((a) => a.status === "present").length;
     const absent = total - present;
 
     const percentage =
@@ -22,49 +18,41 @@ export const getStudentDashboard = async (req, res) => {
     // 🎓 Grades
     const grades = await Grade.find({ student: studentId }).populate(
       "subject",
-      "name"
+      "name",
     );
 
     // 🔥 تنظيف البيانات
-    const cleanGrades = grades.filter(
-      (g) => g && g.subject
-    );
+    const cleanGrades = grades.filter((g) => g && g.subject);
 
     // 📊 تحويل الداتا
     const subjectsGrades = cleanGrades.map((g) => {
       const weeks = g.weeks || [];
 
-      // 🔥 آخر أسبوع فعلي
-      const lastWeek =
-        weeks.length > 0
-          ? Math.max(...weeks.map((w) => w.weekNumber || 0))
-          : 0;
-
-      // 📊 عدد الأسابيع
       const weeksCount = weeks.length;
 
-      // 🎯 Grade Letter
-      let gradeLetter = "F";
-      if (g.total >= 80) gradeLetter = "A";
-      else if (g.total >= 70) gradeLetter = "B";
-      else if (g.total >= 60) gradeLetter = "C";
-      else if (g.total >= 50) gradeLetter = "D";
+      const lastWeek =
+        weeksCount > 0 ? Math.max(...weeks.map((w) => w.weekNumber || 0)) : 0;
 
       return {
         subjectName: g.subject?.name || "Unknown",
 
-        total: g.total || 0,
-        grade: gradeLetter,
+        total: g.total ?? 0,
+        grade: getGradeLetter(g.total),
 
         weeksCount,
         lastWeek,
+
+        // 🔥 مهم جدًا نضيف الامتحانات هنا
+        monthExam1: g.monthExam1 ?? 0,
+        monthExam2: g.monthExam2 ?? 0,
+        finalExam: g.finalExam ?? 0,
       };
     });
 
     // 🔢 Average Grades
     const totalGradesSum = cleanGrades.reduce(
       (acc, g) => acc + (g.total || 0),
-      0
+      0,
     );
 
     const avgGrades =
@@ -83,8 +71,7 @@ export const getStudentDashboard = async (req, res) => {
 
     // 🚀 Response النهائي
     res.json({
-      name:
-        req.user.firstName + " " + req.user.secondName,
+      name: req.user.firstName + " " + req.user.secondName,
 
       attendance: {
         total,
@@ -106,16 +93,46 @@ export const getStudentDashboard = async (req, res) => {
     });
   }
 };
+// export const getStudentGrades = async (req, res) => {
+//   try {
+//     const studentId = req.user._id;
+
+//     const grades = await Grade.find({ student: studentId }).populate(
+//       "subject",
+//       "name",
+//     );
+
+//     res.json(grades);
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
 export const getStudentGrades = async (req, res) => {
   try {
     const studentId = req.user._id;
 
-    const grades = await Grade.find({ student: studentId }).populate(
-      "subject",
-      "name",
-    );
+    const grades = await Grade.find({ student: studentId })
+      .populate("subject", "name")
+      .lean();
 
-    res.json(grades);
+    const formatted = grades.map((g) => ({
+      _id: g._id,
+      subject: g.subject,
+      weeks: g.weeks || [],
+
+      monthExam1: g.monthExam1 || 0,
+      monthExam2: g.monthExam2 || 0,
+      finalExam: g.finalExam || 0,
+
+      total:
+        (g.weeks?.reduce((a, w) => a + (w.weekly || 0), 0) || 0) +
+        (g.monthExam1 || 0) +
+        (g.monthExam2 || 0) +
+        (g.finalExam || 0),
+    }));
+
+    res.json(formatted);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
