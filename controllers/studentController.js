@@ -1,112 +1,79 @@
 import { Attendance } from "../models/attendance.model.js";
-import { Grade } from "../models/grids.js";
+
+
+
+import { Grade } from "../models/grades.js";
+
+// 🎓 Grade Letter
+const getGradeLetter = (total = 0) => {
+  const t = Number(total) || 0;
+
+  if (t >= 80) return "A";
+  if (t >= 70) return "B";
+  if (t >= 60) return "C";
+  if (t >= 50) return "D";
+  return "F";
+};
 
 export const getStudentDashboard = async (req, res) => {
+  console.log("🔥 DASHBOARD HIT");
   try {
     const studentId = req.user._id;
 
-    // 📊 Attendance
+    // attendance
     const attendance = await Attendance.find({ student: studentId });
 
-    const total = attendance.length;
-    const present = attendance.filter((a) => a.status === "present").length;
-    const absent = total - present;
+    // grades
+    const grades = await Grade.find({ student: studentId })
+      .populate("subject", "name")
+      .lean();
 
-    const percentage =
-      total === 0 ? 0 : Number(((present / total) * 100).toFixed(2));
-
-    // 🎓 Grades
-    const grades = await Grade.find({ student: studentId }).populate(
-      "subject",
-      "name",
-    );
-
-    // 🔥 تنظيف البيانات
-    const cleanGrades = grades.filter((g) => g && g.subject);
-
-    // 📊 تحويل الداتا
-    const subjectsGrades = cleanGrades.map((g) => {
+    const subjects = grades.map((g) => {
       const weeks = g.weeks || [];
 
-      const weeksCount = weeks.length;
+      const total =
+        weeks.reduce((a, w) => a + (w.weekly || 0), 0) +
+        (g.monthExam1 || 0) +
+        (g.monthExam2 || 0) +
+        (g.finalExam || 0);
 
-      const lastWeek =
-        weeksCount > 0 ? Math.max(...weeks.map((w) => w.weekNumber || 0)) : 0;
+      const weeksCount = weeks.filter((w) => w.weekly > 0).length;
 
       return {
-        subjectName: g.subject?.name || "Unknown",
-
-        total: g.total ?? 0,
-        grade: getGradeLetter(g.total),
-
+        subjectName: g.subject?.name,
         weeksCount,
-        lastWeek,
-
-        // 🔥 مهم جدًا نضيف الامتحانات هنا
-        monthExam1: g.monthExam1 ?? 0,
-        monthExam2: g.monthExam2 ?? 0,
-        finalExam: g.finalExam ?? 0,
+        monthExam1: g.monthExam1,
+        monthExam2: g.monthExam2,
+        finalExam: g.finalExam,
+        total,
+        grade: getGradeLetter(total),
       };
     });
 
-    // 🔢 Average Grades
-    const totalGradesSum = cleanGrades.reduce(
-      (acc, g) => acc + (g.total || 0),
-      0,
-    );
+    const average =
+      subjects.length > 0
+        ? subjects.reduce((a, s) => a + s.total, 0) / subjects.length
+        : 0;
 
-    const avgGrades =
-      cleanGrades.length === 0
-        ? 0
-        : Number((totalGradesSum / cleanGrades.length).toFixed(2));
-
-    // 🎯 Status logic
-    let status = "Weak";
-
-    if (percentage >= 85 && avgGrades >= 80) {
-      status = "Excellent";
-    } else if (percentage >= 70 && avgGrades >= 60) {
-      status = "Good";
-    }
-
-    // 🚀 Response النهائي
     res.json({
-      name: req.user.firstName + " " + req.user.secondName,
+      name: req.user.name,
+      status: req.user.status || "Active",
 
       attendance: {
-        total,
-        present,
-        absent,
-        percentage,
+        present: attendance.length,
+        absent: 0,
+        percentage: 100,
       },
 
       grades: {
-        average: avgGrades,
-        subjects: subjectsGrades,
+        subjects,
+        average: Number(average.toFixed(1)),
       },
-
-      status,
     });
   } catch (error) {
-    res.status(500).json({
-      message: error.message,
-    });
+    res.status(500).json({ message: error.message });
   }
 };
-// export const getStudentGrades = async (req, res) => {
-//   try {
-//     const studentId = req.user._id;
-
-//     const grades = await Grade.find({ student: studentId }).populate(
-//       "subject",
-//       "name",
-//     );
-
-//     res.json(grades);
-//   } catch (error) {
-//     res.status(500).json({ message: error.message });
-//   }
-// };
 
 export const getStudentGrades = async (req, res) => {
   try {

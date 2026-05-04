@@ -2,7 +2,7 @@
 import { User } from "../models/user.model.js";
 import { Subject } from "../models/subject.js";
 import { Attendance } from "../models/attendance.model.js";
-import { Grade } from "../models/grids.js";
+import { Grade } from "../models/grades.js";
 
 export const getMyClasses = async (req, res) => {
   try {
@@ -213,69 +213,102 @@ export const getStudentReport = async (req, res) => {
 export const saveWeeklyGrades = async (req, res) => {
   const { classId, subjectId, weekNumber, grades } = req.body;
 
-  for (const g of grades) {
-    await Grade.findOneAndUpdate(
-      {
-        student: g.studentId,
-        class: classId,
-        subject: subjectId,
-      },
-      {
-        $setOnInsert: {
+  try {
+    for (const g of grades) {
+      await Grade.findOneAndUpdate(
+        {
           student: g.studentId,
           class: classId,
           subject: subjectId,
-          weeks: [],
         },
-        $pull: {
-          weeks: { weekNumber }, // 🔥 يمنع التكرار
-        },
-        $set: {
-          student: g.studentId,
-          class: classId,
-          subject: subjectId,
-          weeks: {
-            weekNumber,
-            weekly: g.weekly,
-            behavior: g.behavior,
-            homework: g.homework,
+        {
+          $setOnInsert: {
+            student: g.studentId,
+            class: classId,
+            subject: subjectId,
+          },
+          $pull: {
+            weeks: { weekNumber },
+          },
+          $push: {
+            weeks: {
+              weekNumber,
+              weekly: g.weekly,
+              behavior: g.behavior,
+              homework: g.homework,
+            },
           },
         },
-      },
-      { upsert: true, new: true },
-    );
-  }
+        { upsert: true, new: true }
+      );
+    }
 
-  res.json({ message: "Weekly saved" });
+    res.json({ message: "Weekly saved" });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
 };
+// export const saveExams = async (req, res) => {
+//   try {
+//     const { studentId, classId, subjectId, monthExam1, monthExam2, finalExam } =
+//       req.body;
+
+//     const grade = await Grade.findOneAndUpdate(
+//       {
+//         student: studentId,
+//         class: classId,
+//         subject: subjectId,
+//       },
+//       {
+//         $set: {
+//           monthExam1: monthExam1 || 0,
+//           monthExam2: monthExam2 || 0,
+//           finalExam: finalExam || 0,
+//         },
+//       },
+//       { new: true, upsert: true },
+//     );
+
+//     // 🔥 لازم تحسبي total هنا
+//     grade.total =
+//       (grade.weeks?.reduce((a, w) => a + (w.weekly || 0), 0) || 0) +
+//       (grade.monthExam1 || 0) +
+//       (grade.monthExam2 || 0) +
+//       (grade.finalExam || 0);
+
+//     await grade.save();
+
+//     res.json(grade);
+//   } catch (error) {
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
 export const saveExams = async (req, res) => {
   try {
-    const { studentId, classId, subjectId, monthExam1, monthExam2, finalExam } =
-      req.body;
+    const {
+      studentId,
+      classId,
+      subjectId,
+      monthExam1,
+      monthExam2,
+      finalExam,
+    } = req.body;
 
     const grade = await Grade.findOneAndUpdate(
-      {
-        student: studentId,
-        class: classId,
-        subject: subjectId,
-      },
+      { student: studentId, class: classId, subject: subjectId },
       {
         $set: {
-          monthExam1: monthExam1 || 0,
-          monthExam2: monthExam2 || 0,
-          finalExam: finalExam || 0,
+          monthExam1,
+          monthExam2,
+          finalExam,
         },
       },
-      { new: true, upsert: true },
+      { new: true, upsert: true }
     );
 
-    // 🔥 لازم تحسبي total هنا
-    grade.total =
-      (grade.weeks?.reduce((a, w) => a + (w.weekly || 0), 0) || 0) +
-      (grade.monthExam1 || 0) +
-      (grade.monthExam2 || 0) +
-      (grade.finalExam || 0);
-
+    // 🔥 لازم تعيدي الحساب manually
+    grade.calculateTotal();
     await grade.save();
 
     res.json(grade);
@@ -283,6 +316,7 @@ export const saveExams = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 export const getTeacherDashboard = async (req, res) => {
   try {
     const teacherId = req.user._id;

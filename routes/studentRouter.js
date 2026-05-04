@@ -1,5 +1,5 @@
 import { Router } from "express";
-import {  getStudentDashboard, getStudentGrades } from "../controllers/studentController.js";
+import {   getStudentDashboard, getStudentGrades } from "../controllers/studentController.js";
 import { auth, role } from "../Middleware/Auth.js";
 
 const studentRouter = Router();

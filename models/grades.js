@@ -21,32 +21,26 @@ const gradeSchema = new mongoose.Schema({
   total: { type: Number, default: 0 },
 });
 
+// 🔥 حساب التوتال بشكل صحيح
 gradeSchema.methods.calculateTotal = function () {
   const weeks = this.weeks || [];
 
-  const weeklyAvg =
-    weeks.reduce((s, w) => s + (w.weekly || 0), 0) / 13;
-
-  const behaviorAvg =
-    weeks.reduce((s, w) => s + (w.behavior || 0), 0) / 13;
-
-  const homeworkAvg =
-    weeks.reduce((s, w) => s + (w.homework || 0), 0) / 13;
-
-  const weeklyScore =
-    (weeklyAvg + behaviorAvg + homeworkAvg); // 60%
+  const weeklyScore = weeks.reduce((s, w) => s + (w.weekly || 0), 0);
+  const behaviorScore = weeks.reduce((s, w) => s + (w.behavior || 0), 0);
+  const homeworkScore = weeks.reduce((s, w) => s + (w.homework || 0), 0);
 
   const examsScore =
     (this.monthExam1 || 0) +
     (this.monthExam2 || 0) +
-    (this.finalExam || 0); // 40%
+    (this.finalExam || 0);
 
-  this.total = weeklyScore + examsScore;
+  this.total = weeklyScore + behaviorScore + homeworkScore + examsScore;
 };
 
-gradeSchema.index({ student: 1, class: 1, subject: 1 }, { unique: true });
-gradeSchema.pre("save", async function () {
+// ⚠️ مهم: خليها pre-save فقط
+gradeSchema.pre("save", function (next) {
   this.calculateTotal();
+  next();
 });
 
 export const Grade = mongoose.model("Grade", gradeSchema);
